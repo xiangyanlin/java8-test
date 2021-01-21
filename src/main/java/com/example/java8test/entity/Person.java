@@ -66,14 +66,18 @@ public  class Person implements Comparable<Person> {
     /**
      * T重写compareTo方法实现按年龄来排序
      */
+//    @Override
+//    public int compareTo(Person o) {
+//        if (this.age > o.getAge()) {
+//            return 1;
+//        }
+//        if (this.age < o.getAge()) {
+//            return -1;
+//        }
+//        return 0;
+//    }
     @Override
-    public int compareTo(Person o) {
-        if (this.age > o.getAge()) {
-            return 1;
-        }
-        if (this.age < o.getAge()) {
-            return -1;
-        }
-        return 0;
+    public int compareTo(Person person) {
+        return this.name.compareTo(person.name);
     }
 }
