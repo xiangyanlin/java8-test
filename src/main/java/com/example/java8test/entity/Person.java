@@ -8,29 +8,59 @@ package com.example.java8test.entity;
  *
  */
 public  class Person implements Comparable<Person> {
+    private int id;
     private String name;
     private int age;
+
+    public Person() {
+    }
 
     public Person(String name, int age) {
         super();
         this.name = name;
         this.age = age;
     }
+    public Person( int id,String name, int age) {
+        super();
+        this.id=id;
+        this.name = name;
+        this.age = age;
+    }
+
+    public int getId() {
+        return id;
+    }
+
+    public Person setId(int id) {
+        this.id = id;
+        return this;
+    }
 
     public String getName() {
         return name;
     }
 
-    public void setName(String name) {
+    public Person setName(String name) {
         this.name = name;
+        return this;
     }
 
     public int getAge() {
         return age;
     }
 
-    public void setAge(int age) {
+    public Person setAge(int age) {
         this.age = age;
+        return this;
+    }
+
+    @Override
+    public String toString() {
+        return "Person{" +
+                "id='" + id + '\'' +
+                ", name='" + name + '\'' +
+                ", age=" + age +
+                '}';
     }
 
     /**
