@@ -1,8 +1,11 @@
 package com.example.java8test.controller;
 
 import com.example.java8test.entity.Apple;
+import com.example.java8test.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
+import javax.transaction.Transactional;
 import java.util.List;
 
 /**
@@ -12,6 +15,10 @@ import java.util.List;
  */
 @RestController
 public class TestController {
+
+    @Resource
+    private UserService userService;
+
     @PostMapping("/hello")
     public String test(String name,@RequestBody List<Apple> list) {
         /**
@@ -46,4 +53,16 @@ public class TestController {
         System.out.println(list[1].toString());
         return list.length+"";
     }
+
+
+    @RequestMapping("/test1")
+    public void test1(){
+        userService.testPropagation1();
+    }
+
+    @RequestMapping("/test2")
+    public void test2(){
+        userService.testPropagation2();
+    }
+
 }
