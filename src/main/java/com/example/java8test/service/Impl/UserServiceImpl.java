@@ -1,7 +1,9 @@
 package com.example.java8test.service.Impl;
 
 import com.example.java8test.dao.UserRepository;
+import com.example.java8test.entity.Person;
 import com.example.java8test.entity.User;
+import com.example.java8test.service.PersonService;
 import com.example.java8test.service.UserService;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,9 @@ import java.util.Objects;
 public class UserServiceImpl implements UserService {
     @Resource
     private UserRepository userRepository;
+
+    @Resource
+    private PersonService personService;
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
@@ -48,10 +53,13 @@ public class UserServiceImpl implements UserService {
     @Override
     //@Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public void testPropagation2() {
-        User user1=new User();
-        user1.setUserName("张三");
-        save(user1);
+//        User user1=new User();
+//        user1.setUserName("张三");
+//        save(user1);
 
+        Person person=new Person();
+        person.setName("张三");
+        personService.save(person);
         User user2=new User();
         user2.setUserName("李四");
         saveWithException(user2);
