@@ -1,11 +1,12 @@
 package com.example.java8test.controller;
 
 import com.example.java8test.entity.Apple;
+import com.example.java8test.entity.User;
+import com.example.java8test.service.PersonService;
 import com.example.java8test.service.UserService;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
-import javax.transaction.Transactional;
 import java.util.List;
 
 /**
@@ -18,6 +19,9 @@ public class TestController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private PersonService personService;
 
     @PostMapping("/hello")
     public String test(String name,@RequestBody List<Apple> list) {
@@ -63,6 +67,29 @@ public class TestController {
     @RequestMapping("/test2")
     public void test2(){
         userService.testPropagation2();
+    }
+
+    @RequestMapping("/test3")
+    public void test3(){
+        User user1=new User();
+        user1.setUserName("张三");
+        userService.save(user1);
+
+        User user2=new User();
+        user2.setUserName("李四");
+        userService.save(user2);
+        throw new RuntimeException();
+    }
+
+    @RequestMapping("/test4")
+    public void test4(){
+        User user1=new User();
+        user1.setUserName("张三");
+        userService.save(user1);
+
+        User user2=new User();
+        user2.setUserName("李四");
+        userService.saveWithException(user2);
     }
 
 }

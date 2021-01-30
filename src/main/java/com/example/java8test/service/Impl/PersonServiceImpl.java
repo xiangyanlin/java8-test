@@ -23,6 +23,5 @@ public class PersonServiceImpl implements PersonService {
     @Transactional(propagation = Propagation.REQUIRED,rollbackFor = Exception.class)
     public void save(Person person){
         personRepository.save(person);
-        throw new RuntimeException();
     }
 }
