@@ -1,5 +1,7 @@
 package com.example.java8test.jvm;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * @author XiangYanLin
  * @date 2021/2/2
@@ -11,6 +13,12 @@ public class HelloApp {
     private static int a = 1;
 
     public static void main(String[] args) {
+        System.out.println("123");
+        try {
+            TimeUnit.SECONDS.sleep(300000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         System.out.println(a);
     }
 }
