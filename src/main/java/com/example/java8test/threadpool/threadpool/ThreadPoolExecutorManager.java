@@ -26,7 +26,7 @@ public class ThreadPoolExecutorManager {
     /**
      * IO密集型
      */
-    private static final int IO_CORE_POOL_SIZE=N_CPUS+1;
+    private static final int IO_CORE_POOL_SIZE=2*N_CPUS;
 
     /**
      * 核心线程数
