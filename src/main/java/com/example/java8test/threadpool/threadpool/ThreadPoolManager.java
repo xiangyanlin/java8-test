@@ -10,24 +10,25 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @date 2021/2/22
  * 线程池管理
  */
+@Slf4j
 public class ThreadPoolManager {
     private static final String THREAD_NAME_COMMON = "threadPool-common";
 
     /**
      * 普通线程池
      */
-    private ThreadPoolExecutor mPoolExecutor;
+    private final ThreadPoolExecutor mPoolExecutor;
 
     /**
      * 普通线程池任务队列-二级队列
      */
-    private HashMap<Integer, HashMap<String, LinkedBlockingQueue<Runnable>>> mTaskMapQueue =
+    private final HashMap<Integer, HashMap<String, LinkedBlockingQueue<Runnable>>> mTaskMapQueue =
             new HashMap<>();
 
     /**
      * 任务提交到线程池的任务集合
      */
-    private Map<String, List<WeakReference<Future<?>>>> mTaskMap;
+    private final Map<String, List<WeakReference<Future<?>>>> mTaskMap;
 
     /**
      * 单例
@@ -37,27 +38,23 @@ public class ThreadPoolManager {
     /**
      * 普通线程池核心线程池的数量，同时能够执行的线程数量
      */
-    private int mCommonCorePoolSize = Runtime.getRuntime().availableProcessors() * 2 + 1;
+    private final int mCommonCorePoolSize = Runtime.getRuntime().availableProcessors() * 2 + 1;
 
     /**
      * 非核心线程数
      */
-    private int mNonCorePoolSize = 10;
+    private final int mNonCorePoolSize = 10;
     /**
      * 最大线程池数量
      */
-    private int mMaximumPoolSize = mCommonCorePoolSize + mNonCorePoolSize;
+    private final int mMaximumPoolSize = mCommonCorePoolSize + mNonCorePoolSize;
 
     /**
      * 低优先级任务不占用线程数
      * mMaximumPoolSize > mCommonCorePoolSize
      */
-    private int mSpareThreadSize = 5;
+    private final int mSpareThreadSize = 5;
 
-    /**
-     * 存活时间,根据各种线程任务执行超时时间评估 （网络重连任务 超时）
-     */
-    private long mKeepAliveTime = 30;
     /**
      * 线程池任务队列
      */
@@ -65,13 +62,16 @@ public class ThreadPoolManager {
 
     private long mRejectCount = 0;
 
-    private LinkedBlockingQueue<Runnable> mQueue =
-            new LinkedBlockingQueue<Runnable>(MAX_QUEUE_LENGTH);
+    private final LinkedBlockingQueue<Runnable> mQueue =
+            new LinkedBlockingQueue<>(MAX_QUEUE_LENGTH);
 
     /**
      * 创建一个新的实例 ThreadPoolManager
      */
     private ThreadPoolManager() {
+
+        //存活时间,根据各种线程任务执行超时时间评估 （网络重连任务 超时）
+        long mKeepAliveTime = 30;
         mPoolExecutor = new ThreadPoolExecutor(
                 mCommonCorePoolSize,
                 mMaximumPoolSize,
@@ -83,6 +83,14 @@ public class ThreadPoolManager {
                 new ThreadFactory() {
                     private final AtomicInteger mCount = new AtomicInteger(1);
 
+                    /**
+                     * Constructs a new {@code Thread}.  Implementations may also initialize
+                     * priority, name, daemon status, {@code ThreadGroup}, etc.
+                     *
+                     * @param r a runnable to be executed by new thread instance
+                     * @return constructed thread, or {@code null} if the request to
+                     *         create a thread is rejected
+                     */
                     @Override
                     public Thread newThread(Runnable r) {
                         return new Thread(r, THREAD_NAME_COMMON + "#" + mCount.getAndIncrement());
@@ -90,68 +98,60 @@ public class ThreadPoolManager {
                 }
         );
         // 用来对超出maximumPoolSize的任务的处理策略
-        mPoolExecutor.setRejectedExecutionHandler(new RejectedExecutionHandler() {
-            @Override
-            public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
-                mRejectCount++;
-                System.out.println("ThreadPoolManager rejectedExecution happaned mRejectCount=" +
-                        mRejectCount);
-                ThreadPoolManager.getInstance().addCommonTask("", r, Thread.NORM_PRIORITY);
-            }
+        mPoolExecutor.setRejectedExecutionHandler((r, e) -> {
+            mRejectCount++;
+            log.info("ThreadPoolManager rejectedExecution happaned mRejectCount=" + mRejectCount);
+            ThreadPoolManager.getInstance().addCommonTask("", r, Thread.NORM_PRIORITY);
         });
 
-        mTaskMap = new WeakHashMap<String, List<WeakReference<Future<?>>>>();
+        mTaskMap = new WeakHashMap<>();
 
-        mPoolExecutor.execute(new Runnable() {
-            @Override
-            public void run() {
-                while (true) {
-                    try {
-                        int available = mMaximumPoolSize - mPoolExecutor.getActiveCount();
-                        // 线程池队列满了不调度
-                        if (mQueue.size() >= MAX_QUEUE_LENGTH) {
+        mPoolExecutor.execute(() -> {
+            while (true) {
+                try {
+                    int available = mMaximumPoolSize - mPoolExecutor.getActiveCount();
+                    // 线程池队列满了不调度
+                    if (mQueue.size() >= MAX_QUEUE_LENGTH) {
+                        continue;
+                    }
+                    // 调度策略 根据任务的优先级进行调度,高优先级任务优先调度
+                    for (int p = Thread.MAX_PRIORITY; p > Thread.MIN_PRIORITY; p--) {
+                        // 如果优先级小于5的线程(低优先级)来了，空闲线程太少，不调度
+                        if (p < Thread.NORM_PRIORITY &&
+                                available < mSpareThreadSize) {
+                            log.info("available = " + available + " mMaximumPoolSize=" +
+                                            mMaximumPoolSize);
+                            break;
+                        }
+                        HashMap<String, LinkedBlockingQueue<Runnable>> mapQueue =
+                                mTaskMapQueue.get(p);
+                        if (mapQueue == null) {
                             continue;
                         }
-                        // 调度策略 根据任务的优先级进行调度,高优先级任务优先调度
-                        for (Integer p = Thread.MAX_PRIORITY; p > Thread.MIN_PRIORITY; p--) {
-                            // 如果优先级小于5的线程(低优先级)来了，空闲线程太少，不调度
-                            if (p < Thread.NORM_PRIORITY &&
-                                    available < mSpareThreadSize) {
-                                System.out
-                                        .println("available = " + available + " mMaximumPoolSize=" +
-                                                mMaximumPoolSize);
-                                break;
-                            }
-                            HashMap<String, LinkedBlockingQueue<Runnable>> mapQueue =
-                                    mTaskMapQueue.get(p);
-                            if (mapQueue == null) {
-                                continue;
-                            }
-                            if (!mapQueue.isEmpty()) {
-                                Set<String> taskKeySet = mapQueue.keySet();
-                                Iterator<String> subIterator = taskKeySet.iterator();
-                                if (subIterator.hasNext()) {
-                                    String taskName = subIterator.next();
-                                    LinkedBlockingQueue<Runnable> queue = mapQueue.get(taskName);
-                                    if (!queue.isEmpty()) {
-                                        try {
-                                            Runnable runnable = queue.take();
-                                            ThreadPoolManager.getInstance()
-                                                    .submitTask(runnable, taskName);
-                                            // 正常调度了一个任务，重新遍历寻找高优先级任务
-                                            break;
-                                        } catch (InterruptedException e) {
-                                            e.printStackTrace();
-                                            break;
-                                        }
+                        if (!mapQueue.isEmpty()) {
+                            Set<String> taskKeySet = mapQueue.keySet();
+                            Iterator<String> subIterator = taskKeySet.iterator();
+                            if (subIterator.hasNext()) {
+                                String taskName = subIterator.next();
+                                LinkedBlockingQueue<Runnable> queue = mapQueue.get(taskName);
+                                if (!queue.isEmpty()) {
+                                    try {
+                                        Runnable runnable = queue.take();
+                                        ThreadPoolManager.getInstance()
+                                                .submitTask(runnable, taskName);
+                                        // 正常调度了一个任务，重新遍历寻找高优先级任务
+                                        break;
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                        break;
                                     }
                                 }
                             }
-                            // 没有找到任务，继续找任务
                         }
-                    } catch (Exception e) {
-                        e.printStackTrace();
+                        // 没有找到任务，继续找任务
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
         });
@@ -163,7 +163,7 @@ public class ThreadPoolManager {
      * @param taskName 任务名称
      * @param task     任务
      * @param priority 任务优先级
-     * @throws NullPointerException
+     * @throws NullPointerException NPE
      */
     public synchronized void addCommonTask(String taskName, Runnable task, int priority) throws
             NullPointerException {
@@ -178,8 +178,8 @@ public class ThreadPoolManager {
         }
         HashMap<String, LinkedBlockingQueue<Runnable>> mapQueue = mTaskMapQueue.get(priority);
         if (mapQueue == null) {
-            mapQueue = new HashMap<String, LinkedBlockingQueue<Runnable>>(16);
-            LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<Runnable>();
+            mapQueue = new HashMap<>(16);
+            LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
             mapQueue.put(taskName, queue);
         }
         LinkedBlockingQueue<Runnable> queue = mapQueue.get(taskName);
@@ -261,7 +261,7 @@ public class ThreadPoolManager {
     @Deprecated
     public void executeTaskThread(Thread task) {
         String taskName = task.getName();
-        System.out.println("ThreadPoolManager executeTaskThread task name = " + taskName);
+        log.info("ThreadPoolManager executeTaskThread task name = " + taskName);
         printPoolExecutorInfo();
         mPoolExecutor.execute(task);
     }
@@ -287,17 +287,12 @@ public class ThreadPoolManager {
     /**
      * 添加执行任务到队列中
      *
-     * @param request
      */
     private void addTask(Future<?> request, String taskTag) {
         synchronized (ThreadPoolManager.class) {
             if (taskTag != null) {
-                List<WeakReference<Future<?>>> requestList = mTaskMap.get(taskTag);
-                if (requestList == null) {
-                    requestList = new LinkedList<WeakReference<Future<?>>>();
-                    mTaskMap.put(taskTag, requestList);
-                }
-                requestList.add(new WeakReference<Future<?>>(request));
+                List<WeakReference<Future<?>>> requestList = mTaskMap.computeIfAbsent(taskTag, k -> new LinkedList<>());
+                requestList.add(new WeakReference<>(request));
             }
         }
     }
@@ -309,9 +304,8 @@ public class ThreadPoolManager {
         for (String clsName : mTaskMap.keySet()) {
             List<WeakReference<Future<?>>> requestList = mTaskMap.get(clsName);
             if (requestList != null) {
-                Iterator<WeakReference<Future<?>>> iterator = requestList.iterator();
-                while (iterator.hasNext()) {
-                    Future<?> request = iterator.next().get();
+                for (WeakReference<Future<?>> futureWeakReference : requestList) {
+                    Future<?> request = futureWeakReference.get();
                     if (request != null) {
                         request.cancel(true);
                     }
@@ -325,9 +319,9 @@ public class ThreadPoolManager {
      * 根据特定任务名称取消任务
      */
     private void cancelTaskThreads(String taskName) {
-        System.out.println("ThreadPoolManager cancelTaskThreads task name = " + taskName);
+        log.info("ThreadPoolManager cancelTaskThreads task name = " + taskName);
         // 二级队列
-        for (Integer p = Thread.MAX_PRIORITY; p > Thread.MIN_PRIORITY; p--) {
+        for (int p = Thread.MAX_PRIORITY; p > Thread.MIN_PRIORITY; p--) {
             HashMap<String, LinkedBlockingQueue<Runnable>> mapQueue =
                     mTaskMapQueue.get(p);
             if (mapQueue != null) {
@@ -358,7 +352,7 @@ public class ThreadPoolManager {
 
     private void printPoolExecutorInfo() {
         if (mPoolExecutor != null) {
-            System.out.println(
+            log.info(
                     "ThreadPoolManager mPoolExecutor info:[poolSize:" + mPoolExecutor.getPoolSize()
                             + "，activeCount:" + mPoolExecutor.getActiveCount()
                             + "，taskQueueCount:" + mPoolExecutor.getQueue().size()
@@ -391,19 +385,19 @@ public class ThreadPoolManager {
         }
         List<WeakReference<Future<?>>> requestList = mTaskMap.get(taskTag);
         if (requestList != null) {
-            Iterator<WeakReference<Future<?>>> iterator = requestList.iterator();
-            while (iterator.hasNext()) {
-                Future<?> request = iterator.next().get();
-                if (request != null) {
-                    if (request.isCancelled()) {
-                        System.out.println(
-                                "ThreadPoolManager taskTag: " + taskTag + " has canceled ");
-                        continue;
-                    }
-                    if (!request.isDone()) {
-                        System.out.println("ThreadPoolManager hasTask " + taskTag);
-                        return true;
-                    }
+            for (WeakReference<Future<?>> futureWeakReference : requestList) {
+                Future<?> request = futureWeakReference.get();
+                if (Objects.isNull(request)) {
+                    continue;
+                }
+                if (request.isCancelled()) {
+                    log.info(
+                            "ThreadPoolManager taskTag: " + taskTag + " has canceled ");
+                    continue;
+                }
+                if (!request.isDone()) {
+                    log.info("ThreadPoolManager hasTask " + taskTag);
+                    return true;
                 }
             }
         }
